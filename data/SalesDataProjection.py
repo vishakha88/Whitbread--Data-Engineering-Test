@@ -1,25 +1,59 @@
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import logging
+
+logging.basicConfig(filename= "logs/logFile.log", filemode='w', level=logging.DEBUG)
+# logging.warning('This will get logged to a file')
+logging.info("Projection started.")
 
 class SalesDataProjection:
     def __init__(self):
+        self.resultSet = []
+        self.TotalRows = []
         try:
+            logging.info("Sales Data Consolidation")
             self.SalesData2003 = pd.read_json("data/SalesData_2003.json")
-            # print(SalesData2003)
             self.SalesData2004 = pd.read_json("data/SalesData_2004.json")
-            # print(SalesData2004)
             self.SalesData2005 = pd.read_json("data/SalesData_2005.json")
-            # print(SalesData2005)
-
+            
             #combine 3 dataframes into 1
-            # self.SalesDataConsolidated =  xxxxxxxxxxxx
+            self.SalesDataConsolidated = pd.concat([self.SalesData2003,self.SalesData2004,self.SalesData2005])
             self.TotalRows = len(self.SalesDataConsolidated)
+            self.resultSet = self.SalesDataConsolidated
+
+            msg = "Sales Data Consolidated. TotalRows =", str(self.TotalRows)
+            logging.info(msg)
         except Exception as exInit:
             print(exInit)
         finally:
-            print("init() completed.")
+            msg = "Sales Data Consolidated. TotalRows =", str(self.TotalRows)
+            logging.info(msg)
+            print(msg)
+
+    def downloadExcel(self, df, filename):
+        try:
+            # saving the excel
+            df.to_excel(filename)
+            print('{} saved successfully.', filename)
+        except Exception as exdownloadExcel:
+            print(exdownloadExcel)
+        finally:
+            print('done')
     
+    def addColumnMSRPSales(self):
+        try:
+            self.SalesDataConsolidated["MSRPSales"] = self.SalesDataConsolidated["MSRP"] * self.SalesDataConsolidated["QUANTITYORDERED"]
+        except Exception as exaddColumnMSRPSales:
+            msg = "exaddColumnMSRPSales"
+            logging.info(msg)
+            print(msg)
+        finally:
+            msg = "MSRPSales added."
+            logging.info(msg)
+            print(msg)
+
+
     def saveSalesDataToParquet(self):
         try:
             # Convert DataFrame to Arrow Table
@@ -31,13 +65,20 @@ class SalesDataProjection:
             pq.write_table(tableSalesData2003, 'parquet/SalesData_2003.parque')
             pq.write_table(tableSalesData2004, 'parquet/SalesData_2004.parque')
             pq.write_table(tableSalesData2005, 'parquet/SalesData_2005.parque')
+            msg = "Sales Data saved to parquet."
+            logging.info(msg)
+            print(msg)
         except Exception as exSaveSalesDataToParquet:
             print(exSaveSalesDataToParquet)
         finally:
-            print("saveSalesDataToParquet() completed.")
+            msg = "saveSalesDataToParquet() completed."
+            logging.info(msg)
+            print(msg)
     
     def getTotalSalesOfCancelledOrders(self,year):
-        print("getTotalSalesOfCancelledOrders started")
+        msg = "getTotalSalesOfCancelledOrders started."
+        logging.info(msg)
+        print(msg)
         salesOfCancelledOrders = []
         try:
             if year==2003 or year == 0:
@@ -54,12 +95,19 @@ class SalesDataProjection:
                 salesOfCancelledOrders2005 = salesOfCancelledOrders
             if year == 0:
                 print("All")
-                # salesOfCancelledOrders = salesOfCancelledOrders2003 + salesOfCancelledOrders2004 + salesOfCancelledOrders2005
+                # salesOfCancelledOrders = pd.concat([salesOfCancelledOrders2003,salesOfCancelledOrders2004,salesOfCancelledOrders2005])
+            self.resultSet['SalesOfCancelledOrders'] = salesOfCancelledOrders
+            self.downloadExcel(self.resultSet['SalesOfCancelledOrders'],'salesOfCancelledOrders.xlsx')
+
         except Exception as exGetTotalSalesOfCancelledOrders:
-            print(exGetTotalSalesOfCancelledOrders)
+            msg = "exGetTotalSalesOfCancelledOrders", exGetTotalSalesOfCancelledOrders
+            logging.info(msg)
+            print(msg)
+
         finally:
-            print("getTotalSalesOfCancelledOrders() completed.")
-            return salesOfCancelledOrders
+            msg = "getTotalSalesOfCancelledOrders completed."
+            logging.info(msg)
+            print(msg)
         
     def getTotalSalesOfOnHoldOrders(self,year):
         print("getTotalSalesOfOnHoldOrders started")
@@ -100,7 +148,7 @@ class SalesDataProjection:
             print("getCountOfDistinctProductsPerLine() completed.")
             return countOfDistinctProductsPerLine
 
-    def calculateVariance(self, columnName):
+    def calculateVariance(self, columnName1, columnName2):
         variance = 0
         try:
             # Variance logic
@@ -113,11 +161,13 @@ class SalesDataProjection:
             # sum_sqr_diff = sum(sqr_diff)
             #calculate variance
             # variance = sum_sqr_diff/(len(self.TotalRows))
+
             # Alternatively,
             
-            variance = self.SalesDataConsolidated[['"'+ columnName + '"']].var()
+            variance = self.SalesDataConsolidated[['"'+ columnName1 + '"']].var()
             # self.SalesDataConsolidated[['MSRP']].var()
             # self.SalesDataConsolidated.var() #print(df.var())
+            # to do save to excel
 
         except Exception as exCalculateVariance:
             print(exCalculateVariance)
@@ -129,10 +179,10 @@ class SalesDataProjection:
         filteredSalesData = []
         try:
             # Filter:- classic cars, years 2004 and 2005, status is shipped
-            filterCar = self.SalesDataConsolidated['PRODUCTLINE'].trim().lower() == "classic cars"
+            filterCar = self.SalesDataConsolidated['PRODUCTLINE'].strip().lower() == "classic cars"
             filterYear1 = self.SalesDataConsolidated['ORDERDATE'] == 2004
             filterYear2 = self.SalesDataConsolidated['ORDERDATE'] == 2005
-            filterStatus = self.SalesDataConsolidated['STATUS'].trim().lower() == "shipped"
+            filterStatus = self.SalesDataConsolidated['STATUS'].strip().lower() == "shipped"
 
             # filtering data on basis all filters
             filteredSalesData = self.SalesDataConsolidated.loc[(filterCar)
@@ -146,6 +196,7 @@ class SalesDataProjection:
             print(exCalculateSalesChangeYOY)
         finally:
             return salesChangeYOY
+    
     
     def filterDatasetByProductLines(self):
         filterDatasetByProductLines = []
@@ -163,17 +214,7 @@ class SalesDataProjection:
         finally:
             return filterDatasetByProductLines
 
-    def downloadExcel(self, df):
-        try:
-            # determining the name of the file
-            file_name = 'data/SalesDataProjection.xlsx'
-            # saving the excel
-            df.to_excel(file_name)
-            print('SalesDataProjection.xlsx saved successfully.')
-        except Exception as exdownloadExcel:
-            print(exdownloadExcel)
-        finally:
-            print('done')
+
     
     def calculateSalesUsingMSRP(self):
         try:
@@ -181,7 +222,7 @@ class SalesDataProjection:
         except Exception as excalculateSalesUsingMSRP:
             print(excalculateSalesUsingMSRP)
         finally:
-            print('calculateSalesUsingMSRP done')
+            print('calculateSalesUsingMSRP exit')
 
 
 objSalesDataProjection = SalesDataProjection()
@@ -194,7 +235,7 @@ objSalesDataProjection.saveSalesDataToParquet()
 
 #region 2.1 Total Sales Of Cancelled Orders
 # What is the total sales value of the cancelled orders? 
-salesOfCancelledOrders = objSalesDataProjection.getTotalSalesOfCancelledOrders(0)
+objSalesDataProjection.getTotalSalesOfCancelledOrders(0)
 #endregion Total Sales Of Cancelled Orders
 
 #region 2.2 Total Sales Of OnHold Orders
@@ -209,8 +250,7 @@ countOfDistinctProductsPerLine = objSalesDataProjection.getCountOfDistinctProduc
 
 #region 2.4 Total sales variance for sales price and MSRP
 # What is the total sales variance for sales calculated at both sales price and MSRP (Manufacturer Suggested Retail Price)
-SalesVariance = objSalesDataProjection.calculateVariance('SALES')
-MSRPVariance = objSalesDataProjection.calculateVariance('MSRP')
+objSalesDataProjection.calculateVariance('SALES','MSRPSales')
 #endregion Total sales variance for sales price and MSRP
 
 #region 2.5 Percent change in sales YOY and filters
