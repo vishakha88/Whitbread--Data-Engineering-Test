@@ -4,7 +4,6 @@ import pyarrow.parquet as pq
 import logging
 
 logging.basicConfig(filename= "logs/logFile.log", filemode='w', level=logging.DEBUG)
-# logging.warning('This will get logged to a file')
 logging.info("Projection started.")
 
 class SalesDataProjection:
@@ -176,7 +175,6 @@ class SalesDataProjection:
             variance = self.SalesDataConsolidated[['"'+ columnName1 + '"']].var()
             # self.SalesDataConsolidated[['MSRP']].var()
             # self.SalesDataConsolidated.var() #print(df.var())
-            # to do save to excel
             self.downloadExcel(self, variance, "data/variance.xlsx")
 
         except Exception as exCalculateVariance:
